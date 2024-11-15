@@ -623,7 +623,7 @@ async def get_invite_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message = await context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
                     message_id=context.user_data.get('last_message_id'),
-                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @ВашНикнейм .",
+                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @Rostislavas .",
                     reply_markup=generate_return_button()
                 )
                 context.user_data['last_message_id'] = message.message_id
