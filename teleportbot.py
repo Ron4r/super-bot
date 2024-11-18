@@ -1,5 +1,3 @@
-
-
 import logging
 import re
 import os
@@ -39,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Список администраторов (замените на свой Telegram ID)
-ADMINS = [1564745598]  # Замените на ваш Telegram ID
+ADMINS = [1564745598]   # Замените на ваш Telegram ID
 
 # Глобальные переменные для хранения состояний
 USER_STATES = {}
@@ -110,6 +108,13 @@ def generate_yes_no_keyboard():
                 InlineKeyboardButton("Да", callback_data="yes"),
                 InlineKeyboardButton("Нет", callback_data="no")
             ]
+        ]
+    )
+
+def generate_stop_button():
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🛑 Остановить", callback_data="stop_invite")]
         ]
     )
 
@@ -243,7 +248,7 @@ async def show_instructions(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Переводите не более 30 человек в день 📊\n"
         "Убедитесь, что ваш аккаунт добавлен в администраторы группы 👤🔒\n\n"
         "Здесь вы можете управлять своими подключёнными аккаунтами Telegram для использования функций парсинга и инвайта.\n\n"
-        "💬 Поддержка\n Если у вас возникли вопросы или идеи по улучшению бота, пишите мне в Telegram — @Rostislavas 📩\n"
+        "💬 Поддержка\n Если у вас возникли вопросы или идеи по улучшению бота, пишите мне в Telegram — @ВашUsername 📩\n"
     )
     message = await query.edit_message_text(
         instruction_text,
@@ -425,7 +430,7 @@ async def select_inviter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data['is_paid']:
         subscription_info = "У вас активна платная подписка.\n Вы можете приглашать неограниченное число пользователей."
     else:
-        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @Rostislavas 👍"
+        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @ВашUsername 👍"
 
     message = await query.edit_message_text(
         f"{subscription_info}\n\nПожалуйста, введите ссылку на группу или @username группы, в которую нужно добавить участников:",
@@ -485,14 +490,14 @@ async def get_invite_group_link(update: Update, context: ContextTypes.DEFAULT_TY
 
         member_status = await app.get_chat_member(chat.id, (await app.get_me()).id)
         logger.info(f"Статус администратора: {member_status.status}")
-        logger.info(f"Can invite users: {getattr(member_status, 'can_invite_users', 'N/A')}")
+        logger.info(f"Права администратора: {member_status.privileges}")
 
         has_invite_rights = False
 
         if member_status.status == ChatMemberStatus.OWNER:
             has_invite_rights = True
         elif member_status.status == ChatMemberStatus.ADMINISTRATOR:
-            has_invite_rights = getattr(member_status, 'can_invite_users', False)
+            has_invite_rights = member_status.privileges.can_invite_users if member_status.privileges else False
         else:
             has_invite_rights = False
 
@@ -623,7 +628,7 @@ async def get_invite_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message = await context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
                     message_id=context.user_data.get('last_message_id'),
-                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @Rostislavas .",
+                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @ВашUsername .",
                     reply_markup=generate_return_button()
                 )
                 context.user_data['last_message_id'] = message.message_id
@@ -643,8 +648,9 @@ async def get_invite_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['last_message_id'] = message.message_id
         return
 
-    # Запускаем приглашение участников как фоновую задачу
-    asyncio.create_task(invite_members_to_group(update, context))
+    # Запускаем приглашение участников как фоновую задачу и сохраняем задачу
+    task = asyncio.create_task(invite_members_to_group(update, context))
+    context.user_data['invite_task'] = task
 
     # Сбрасываем состояние пользователя
     USER_STATES.pop(update.effective_user.id, None)
@@ -692,7 +698,7 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
             message = await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=context.user_data.get('last_message_id'),
-                text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений.\n @Rostislavas ",
+                text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений.\n @ВашUsername ",
                 reply_markup=generate_return_button()
             )
             context.user_data['last_message_id'] = message.message_id
@@ -757,11 +763,12 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
         status_message_id = context.user_data.get('last_message_id')
         status_text = "Начинаю приглашение пользователей:\n"
 
-        # Отправляем первое сообщение
+        # Отправляем первое сообщение с кнопкой "Остановить"
         message = await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=status_message_id,
-            text=status_text
+            text=status_text,
+            reply_markup=generate_stop_button()
         )
         context.user_data['last_message_id'] = message.message_id
 
@@ -769,6 +776,11 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
         messages_to_delete = []
 
         for idx, username in enumerate(members_to_invite, start=1):
+            # Проверяем, была ли задача отменена
+            if context.user_data.get('invite_task') and context.user_data['invite_task'].cancelled():
+                logger.info("Процесс инвайта был остановлен пользователем.")
+                break
+
             try:
                 username = username.lstrip('@')
                 # Получаем информацию о пользователе
@@ -805,12 +817,13 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
                 logger.error(f"Не удалось добавить {username}: {e}")
                 status_text += f"Не удалось добавить {username}: {e}\n"
 
-            # Обновляем сообщение после каждого пользователя
+            # Обновляем сообщение после каждого пользователя с кнопкой "Остановить"
             try:
                 message = await context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
                     message_id=status_message_id,
-                    text=status_text[-4096:]  # Ограничиваем длину сообщения
+                    text=status_text[-4096:],  # Ограничиваем длину сообщения
+                    reply_markup=generate_stop_button()
                 )
                 context.user_data['last_message_id'] = message.message_id
             except Exception as e:
@@ -818,6 +831,10 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
 
             # Задержка между добавлениями, от 60 до 120 секунд
             await asyncio.sleep(random.randint(60, 120))
+            # Проверяем снова, была ли задача отменена
+            if context.user_data.get('invite_task') and context.user_data['invite_task'].cancelled():
+                logger.info("Процесс инвайта был остановлен пользователем.")
+                break
 
         # Удаляем системные сообщения о присоединении
         await delete_system_messages(app, chat.id, messages_to_delete)
@@ -834,19 +851,6 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e:
             logger.error(f"Ошибка при обновлении сообщения в конце: {e}")
 
-        # Планируем отправку сообщения через 24 часа
-        if not from_job:
-            # Проверяем, что context.job_queue не None
-            if context.job_queue:
-                context.job_queue.run_once(
-                    ask_continue_inviting,
-                    when=86400,  # 24 часа
-                    data={'chat_id': update.effective_chat.id, 'user_id': update.effective_user.id},
-                    name=str(update.effective_chat.id)
-                )
-            else:
-                logger.error("context.job_queue is None")
-
     except Exception as e:
         logger.error(f"Ошибка при приглашении участников: {e}")
         message = await context.bot.edit_message_text(
@@ -858,6 +862,24 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
         context.user_data['last_message_id'] = message.message_id
     finally:
         await app.stop()
+        # После завершения инвайта (нормально или прервано), отправляем файл с оставшимися пользователями
+        invited_members = context.user_data.get('invited_members', [])
+        remaining_members = [member for member in all_members if member not in invited_members]
+
+        if remaining_members:
+            filename = f"remaining_users_{update.effective_user.id}.txt"
+            with open(filename, "w", encoding="utf-8") as file:
+                for member in remaining_members:
+                    file.write(f"https://t.me/{member}\n")
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=open(filename, 'rb'),
+                caption="Список оставшихся пользователей."
+            )
+            os.remove(filename)
+
+        # Очищаем задачу из user_data
+        context.user_data.pop('invite_task', None)
 
 # Функция для удаления системных сообщений о присоединении
 async def delete_system_messages(app, chat_id, user_ids):
@@ -870,6 +892,29 @@ async def delete_system_messages(app, chat_id, user_ids):
                     logger.info(f"Удалено системное сообщение с ID {message.id}")
                 except Exception as e:
                     logger.error(f"Не удалось удалить сообщение {message.id}: {e}")
+
+# Функция для остановки инвайта
+async def stop_invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Отменяем задачу инвайта
+    task = context.user_data.get('invite_task')
+    if task and not task.done():
+        task.cancel()
+        # Информируем пользователя
+        message = await query.edit_message_text(
+            "Инвайт остановлен пользователем.",
+            reply_markup=generate_return_button()
+        )
+        context.user_data['last_message_id'] = message.message_id
+    else:
+        # Если задача не найдена или уже завершена
+        message = await query.edit_message_text(
+            "Нет активного процесса инвайта или он уже завершён.",
+            reply_markup=generate_return_button()
+        )
+        context.user_data['last_message_id'] = message.message_id
 
 # Функция для отправки сообщения через 24 часа
 async def ask_continue_inviting(context: ContextTypes.DEFAULT_TYPE):
@@ -1005,7 +1050,7 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_accounts = [acc for acc in accounts if acc.startswith(f'{user_id}_')]
         if len(user_accounts) >= 1:
             message = await query.edit_message_text(
-                "В бесплатной версии вы можете добавить только один аккаунт. Приобретите платную версию для снятия ограничений.\n @Rostislavas",
+                "В бесплатной версии вы можете добавить только один аккаунт. Приобретите платную версию для снятия ограничений.\n @ВашUsername",
                 reply_markup=generate_return_button()
             )
             context.user_data['last_message_id'] = message.message_id
@@ -1318,7 +1363,7 @@ async def view_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_paid_user(username):
         subscription_info = "У вас активна платная подписка. Вы можете добавлять неограниченное количество аккаунтов и приглашать неограниченное число пользователей."
     else:
-        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @Rostislavas👍 \n"
+        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @ВашUsername👍 \n"
 
     message = await query.edit_message_text(
         subscription_info,
@@ -1486,6 +1531,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.isdigit() or data in ('delete', 'submit_code'):
         if USER_STATES.get(user_id) == 'CODE':
             await get_code(update, context)
+    elif data == 'stop_invite':
+        await stop_invite(update, context)
     elif data.startswith('admin_'):
         if user_id in ADMINS:
             await admin_menu_handler(update, context)
@@ -1539,3 +1586,4 @@ if __name__ == "__main__":
 
     # Запускаем бота
     application.run_polling()
+ 
