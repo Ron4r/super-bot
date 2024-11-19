@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Список администраторов (замените на свой Telegram ID)
-ADMINS = [123456789]   # Замените на ваш Telegram ID
+ADMINS = [1564745598]   # Замените на ваш Telegram ID
 
 # Глобальные переменные для хранения состояний
 USER_STATES = {}
