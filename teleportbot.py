@@ -9,7 +9,7 @@ from pyrogram import Client as PyroClient, errors as PyroErrors
 from pyrogram.enums import ChatMemberStatus
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    ReplyKeyboardRemove, File as TGFile
+    File as TGFile
 )
 from telegram.ext import (
     ApplicationBuilder, CallbackQueryHandler,
@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Список администраторов (замените на свой Telegram ID)
-ADMINS = [1564745598]   # Замените на ваш Telegram ID
+ADMINS = [123456789]   # Замените на ваш Telegram ID
 
 # Глобальные переменные для хранения состояний
 USER_STATES = {}
@@ -247,8 +247,11 @@ async def show_instructions(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔹 Рекомендации:\n\n"
         "Переводите не более 30 человек в день 📊\n"
         "Убедитесь, что ваш аккаунт добавлен в администраторы группы 👤🔒\n\n"
-        "Здесь вы можете управлять своими подключёнными аккаунтами Telegram для использования функций парсинга и инвайта.\n\n"
-        "💬 Поддержка\n Если у вас возникли вопросы или идеи по улучшению бота, пишите мне в Telegram — @ВашUsername 📩\n"
+        "Не знаете как получить API id и API hash ? : \n"
+        "Войдите на сайт с помощью своего номера my.telegram.org\n"
+        "Перейдите в API Development Tools\n"
+        "Создайте новое приложение и получите API ID и Hash.\n\n"
+        "💬 Поддержка\n Если у вас возникли вопросы или идеи по улучшению бота, пишите мне в Telegram — @Rostislavas 📩\n"
     )
     message = await query.edit_message_text(
         instruction_text,
@@ -337,11 +340,24 @@ async def parse_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat = await app.get_chat(chat_identifier)
 
             members = []
-            async for member in app.get_chat_members(chat.id):
-                if member.user.is_bot or not member.user.username:
-                    continue  # Пропускаем ботов и пользователей без username
-                link = f"https://t.me/{member.user.username}"
-                members.append(link)
+
+            # Попытка получить участников группы
+            try:
+                async for member in app.get_chat_members(chat.id):
+                    if member.user.is_bot or not member.user.username:
+                        continue  # Пропускаем ботов и пользователей без username
+                    link = f"https://t.me/{member.user.username}"
+                    members.append(link)
+            except PyroErrors.ChatAdminRequired:
+                logger.info("Не удалось получить список участников, получаем из сообщений.")
+
+                # Получение пользователей из сообщений
+                async for message in app.get_chat_history(chat.id, limit=1000):
+                    user = message.from_user
+                    if user and not user.is_bot and user.username:
+                        link = f"https://t.me/{user.username}"
+                        if link not in members:
+                            members.append(link)
 
             if members:
                 filename = f"userlinks_{update.effective_user.id}.txt"
@@ -370,14 +386,6 @@ async def parse_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 context.user_data['last_message_id'] = message.message_id
 
-        except PyroErrors.ChatAdminRequired:
-            message = await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=last_message_id,
-                text="Ошибка: Вы должны быть администратором этой группы.",
-                reply_markup=generate_return_button()
-            )
-            context.user_data['last_message_id'] = message.message_id
         except PyroErrors.ChatInvalid:
             message = await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
@@ -430,7 +438,7 @@ async def select_inviter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data['is_paid']:
         subscription_info = "У вас активна платная подписка.\n Вы можете приглашать неограниченное число пользователей."
     else:
-        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @ВашUsername 👍"
+        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @Rostislavas 👍"
 
     message = await query.edit_message_text(
         f"{subscription_info}\n\nПожалуйста, введите ссылку на группу или @username группы, в которую нужно добавить участников:",
@@ -628,7 +636,7 @@ async def get_invite_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message = await context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
                     message_id=context.user_data.get('last_message_id'),
-                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @ВашUsername .",
+                    text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений \n @Rostislavas .",
                     reply_markup=generate_return_button()
                 )
                 context.user_data['last_message_id'] = message.message_id
@@ -698,7 +706,7 @@ async def invite_members_to_group(update: Update, context: ContextTypes.DEFAULT_
             message = await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=context.user_data.get('last_message_id'),
-                text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений.\n @ВашUsername ",
+                text=f"Вы можете пригласить ещё {remaining} пользователей сегодня. Приобретите платную версию для снятия ограничений.\n @Rostislavas ",
                 reply_markup=generate_return_button()
             )
             context.user_data['last_message_id'] = message.message_id
@@ -916,78 +924,6 @@ async def stop_invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data['last_message_id'] = message.message_id
 
-# Функция для отправки сообщения через 24 часа
-async def ask_continue_inviting(context: ContextTypes.DEFAULT_TYPE):
-    job_data = context.job.data
-    chat_id = job_data['chat_id']
-    user_id = job_data['user_id']
-
-    message = await context.bot.send_message(
-        chat_id=chat_id,
-        text="Хотите продолжить добавлять пользователей?",
-        reply_markup=generate_yes_no_keyboard()
-    )
-    context.user_data['last_message_id'] = message.message_id
-
-    # Устанавливаем состояние пользователя
-    USER_STATES[user_id] = 'WAITING_RESPONSE'
-
-# Обработка ответа пользователя на вопрос о продолжении
-async def handle_continue_inviting(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if USER_STATES.get(update.effective_user.id) != 'WAITING_RESPONSE':
-        return
-
-    query = update.callback_query
-    await query.answer()
-    answer = query.data
-
-    if answer == 'yes':
-        message = await query.edit_message_text(
-            "Продолжить добавлять пользователей из того же файла?",
-            reply_markup=generate_yes_no_keyboard()
-        )
-        context.user_data['last_message_id'] = message.message_id
-
-        # Переходим к следующему состоянию
-        USER_STATES[update.effective_user.id] = 'CHOOSE_FILE'
-    else:
-        message = await query.edit_message_text(
-            "Операция завершена.",
-            reply_markup=generate_return_button()
-        )
-        context.user_data['last_message_id'] = message.message_id
-        USER_STATES.pop(update.effective_user.id, None)
-
-# Обработка выбора файла для продолжения
-async def handle_choose_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if USER_STATES.get(update.effective_user.id) != 'CHOOSE_FILE':
-        return
-
-    query = update.callback_query
-    await query.answer()
-    answer = query.data
-
-    if answer == 'yes':
-        # Продолжаем с тем же файлом
-        message = await query.edit_message_text(
-            "Сколько пользователей добавить в этот раз?",
-            reply_markup=generate_back_button()
-        )
-        context.user_data['last_message_id'] = message.message_id
-
-        # Переходим к состоянию INVITE_COUNT
-        USER_STATES[update.effective_user.id] = 'INVITE_COUNT'
-    else:
-        # Запрашиваем новый файл
-        message = await query.edit_message_text(
-            "Пожалуйста, отправьте новый файл со списком пользователей для приглашения (формат .txt):",
-            reply_markup=generate_back_button()
-        )
-        context.user_data['last_message_id'] = message.message_id
-
-        # Переходим к состоянию INVITE_FILE
-        USER_STATES[update.effective_user.id] = 'INVITE_FILE'
-
 # Функция для обработки кнопки "Назад"
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1050,7 +986,7 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_accounts = [acc for acc in accounts if acc.startswith(f'{user_id}_')]
         if len(user_accounts) >= 1:
             message = await query.edit_message_text(
-                "В бесплатной версии вы можете добавить только один аккаунт. Приобретите платную версию для снятия ограничений.\n @ВашUsername",
+                "В бесплатной версии вы можете добавить только один аккаунт. Приобретите платную версию для снятия ограничений.\n @Rostislavas",
                 reply_markup=generate_return_button()
             )
             context.user_data['last_message_id'] = message.message_id
@@ -1363,7 +1299,7 @@ async def view_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_paid_user(username):
         subscription_info = "У вас активна платная подписка. Вы можете добавлять неограниченное количество аккаунтов и приглашать неограниченное число пользователей."
     else:
-        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @ВашUsername👍 \n"
+        subscription_info = "У вас бесплатная подписка ✨!\n Сейчас вы можете приглашать до 10 пользователей в день.\n\nВ платной версии лимит на количество приглашений исчезнет, и вы сможете добавлять бесконечное количество пользователей и аккаунты  🚀🌐.\n\n Пишите мне, если желаете приобрести платную версию  @Rostislavas👍 \n"
 
     message = await query.edit_message_text(
         subscription_info,
@@ -1474,7 +1410,7 @@ async def admin_remove_paid_user(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"Не удалось удалить сообщение: {e}")
 
-    last_message_id = context.user_data.get('last_message_id')
+    last_message_id = context.user_data['last_message_id']
     paid_users = load_paid_users()
     if username.lower() in (user.lower() for user in paid_users):
         paid_users = [user for user in paid_users if user.lower() != username.lower()]
@@ -1524,10 +1460,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'add_account':
         await add_account(update, context)
     elif data in ('yes', 'no'):
-        if USER_STATES.get(user_id) == 'WAITING_RESPONSE':
-            await handle_continue_inviting(update, context)
-        elif USER_STATES.get(user_id) == 'CHOOSE_FILE':
-            await handle_choose_file(update, context)
+        pass  # Здесь можно добавить обработку ответов "да" или "нет" при необходимости
     elif data.isdigit() or data in ('delete', 'submit_code'):
         if USER_STATES.get(user_id) == 'CODE':
             await get_code(update, context)
@@ -1566,6 +1499,11 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await update.message.reply_text("Пожалуйста, используйте доступные команды или кнопки.")
 
+# Функция обработчика ошибок
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Логирует исключения, возникшие при обработке обновлений."""
+    logger.error(msg="Исключение при обработке обновления:", exc_info=context.error)
+
 # Запуск бота
 if __name__ == "__main__":
     application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -1580,10 +1518,15 @@ if __name__ == "__main__":
     # Обработчик текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
 
+    # Добавляем обработчик документов (файлов)
+    application.add_handler(MessageHandler(filters.Document.FileExtension("txt"), receive_invite_file))
+
     # Обработчики для удаления системных сообщений о присоединении/выходе участников
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, delete_join_messages_in_target_chats))
     application.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_join_messages_in_target_chats))
 
+    # Добавляем обработчик ошибок
+    application.add_error_handler(error_handler)
+
     # Запускаем бота
     application.run_polling()
- 
